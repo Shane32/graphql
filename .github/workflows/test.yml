@@ -22,6 +22,7 @@ jobs:
           - 16
           - 17
           - 18
+          - 19
     steps:
       - uses: actions/checkout@v5
       - name: Set up Node.js
@@ -31,7 +32,7 @@ jobs:
       - name: Install modules - actor ${{ github.actor }} - version ${{ github.run_number }}
         run: npm ci
       - name: Install react
-        run: npm install react@^${{ matrix.react }} react-dom@^${{ matrix.react }} @types/react@^${{ matrix.react }} @types/react-dom@^${{ matrix.react }} @testing-library/react@^${{ matrix.react == '18' && '13' || '12' }} --save-dev
+        run: npm install react@^${{ matrix.react }} react-dom@^${{ matrix.react }} @types/react@^${{ matrix.react }} @types/react-dom@^${{ matrix.react }} @testing-library/react@^${{ (matrix.react == '19' || matrix.react == '18') && '16' || '12' }} ${{ (matrix.react == '19' || matrix.react == '18') && '@testing-library/dom@10' || ''  }} --save-dev
       - name: Build
         run: npm run build
       - name: Run tests
