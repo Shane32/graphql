@@ -78,6 +78,17 @@ interface IGraphQLConfiguration {
    * Default options for subscriptions.
    */
   defaultSubscriptionOptions?: ISubscriptionOptions;
+
+  /**
+   * Indicates whether to validate the response content type before parsing responses.
+   *
+   * When `true`:
+   * - 2xx responses require `application/graphql-response+json` or `application/json` content type
+   * - 4xx responses require `application/graphql-response+json` content type
+   *
+   * When `false` (default), all 2xx and 4xx responses are parsed as JSON regardless of content type.
+   */
+  validateResponseContentType?: boolean;
 }
 
 export default IGraphQLConfiguration;
