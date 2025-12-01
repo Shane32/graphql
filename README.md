@@ -111,6 +111,8 @@ const client = new GraphQLClient({
     defaultCacheTime: 24 * 60 * 60 * 1000,    // optional; specified in milliseconds; default is 1 day
     maxCacheSize: 20 * 1024 * 1024,           // optional; specified in bytes; default is 20MB
 
+    validateResponseContentType: true,        // optional; validate response content type; default is false
+
     // optional; transformation of Request; used to provide authentication information to request
     transformRequest: request => Promise.resolve(request),
 
@@ -508,11 +510,14 @@ This is useful when you need to create request objects outside of the provided h
 | `maxCacheSize`                | `20971520`      | Maximum cache size in bytes (20MB) |
 | `asForm`                      | `false`         | Use form data instead of JSON for requests |
 | `sendDocumentIdAsQuery`       | `false`         | Include documentId as query parameter instead of POST body |
+| `validateResponseContentType` | `false`         | Validate response content type before parsing* |
 | `transformRequest`            | -               | Transform requests (e.g., add auth headers) |
 | `generatePayload`             | -               | Generate WebSocket connection payload |
 | `defaultSubscriptionOptions`  | -               | Default options for subscriptions (timeout & reconnection strategies) |
 | `logHttpError`                | -               | Log HTTP errors |
 | `logWebSocketConnectionError` | -               | Log WebSocket errors |
+
+\* When `validateResponseContentType` is `true`, 2xx responses require `application/graphql-response+json` or `application/json` content type, and 4xx responses require `application/graphql-response+json` content type.
 
 #### Methods
 

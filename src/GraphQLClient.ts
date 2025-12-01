@@ -41,6 +41,7 @@ export default class GraphQLClient implements IGraphQLClient {
   private sendDocumentIdAsQuery?: boolean;
   private logHttpError?: (request: IRequest, response: Response) => void;
   private logWebSocketConnectionError?: (request: IGraphQLRequest<any>, connectionMessage: any, receivedMessage: any) => void;
+  private validateResponseContentType: boolean;
   public readonly defaultSubscriptionOptions?: ISubscriptionOptions;
 
   public constructor(configuration: IGraphQLConfiguration) {
@@ -62,6 +63,7 @@ export default class GraphQLClient implements IGraphQLClient {
     this.sendDocumentIdAsQuery = configuration.sendDocumentIdAsQuery;
     this.logHttpError = configuration.logHttpError;
     this.logWebSocketConnectionError = configuration.logWebSocketConnectionError;
+    this.validateResponseContentType = configuration.validateResponseContentType || false;
     this.defaultSubscriptionOptions = configuration.defaultSubscriptionOptions;
   }
 
@@ -141,7 +143,19 @@ export default class GraphQLClient implements IGraphQLClient {
                 }
 
                 // Check if the response status is valid (between 200 and 299 or between 400 and 499)
-                const valid = (data.status >= 200 && data.status < 300) || (data.status >= 400 && data.status < 500);
+                // When validateResponseContentType is enabled, also check content type
+                let valid: boolean;
+                if (this.validateResponseContentType) {
+                  const contentType = data.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase();
+                  valid =
+                    (data.status >= 200 &&
+                      data.status < 300 &&
+                      (contentType === "application/graphql-response+json" || contentType === "application/json")) ||
+                    (data.status >= 400 && data.status < 500 && contentType === "application/graphql-response+json");
+                } else {
+                  // Without validation, accept all 2xx and 4xx responses
+                  valid = (data.status >= 200 && data.status < 300) || (data.status >= 400 && data.status < 500);
+                }
 
                 // If the response status is not valid, create a new query result object with the error message
                 if (!valid) {
