@@ -463,6 +463,20 @@ const client = new GraphQLClient({
 
 If you want to add GraphQL Codegen to your project, refer to [CODEGEN-README.md](https://github.com/Shane32/graphql/blob/main/CODEGEN-README.md)
 
+### GraphQL Tag Functions
+
+This package exports two GraphQL tag functions: `gql` for code generation only (throws at runtime), and `gqlcompat` for runtime use. Use `gql` in separate `.queries.ts` files with GraphQL Code Generator to generate typed documents, then import the generated documents. Use `gqlcompat` when you need to construct queries at runtime without code generation.
+
+```typescript
+// For codegen - will throw at runtime
+import { gql } from '@shane32/graphql';
+gql`query GetUser { ... }`; // Save within .queries.ts file
+
+// For runtime use
+import { gqlcompat as gql } from '@shane32/graphql';
+const query = gql`query GetUser { ... }`;
+```
+
 ## Creating Request Objects
 
 You can use the `createRequest` function to construct GraphQL request objects that conform to the `IGraphQLRequest` interface:
