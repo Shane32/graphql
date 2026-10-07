@@ -28,10 +28,16 @@ export default class GraphQLError extends Error {
   public constructor(data: IQueryResult<any>) {
     const message = data.errors && data.errors.length ? data.errors[0].message : "Unknown error";
     super(message);
-    Object.setPrototypeOf(this, GraphQLError.prototype);
     this.name = "GraphQLError";
     this.response = data;
+    if (!data.networkError) {
+      this.graphQLErrors = data.errors;
+    } else {
+      this.networkError = data.errors?.[0]?.extensions?.underlyingError || undefined;
+    }
 
+    // Set the prototype explicitly to maintain the correct prototype chain.
+    Object.setPrototypeOf(this, GraphQLError.prototype);
     // Preserve the previous enumerable message property for JSON serialization.
     Object.defineProperty(this, "message", {
       value: message,
@@ -39,8 +45,5 @@ export default class GraphQLError extends Error {
       writable: true,
       configurable: true,
     });
-    if (!data.networkError) {
-      this.graphQLErrors = data.errors;
-    }
   }
 }
