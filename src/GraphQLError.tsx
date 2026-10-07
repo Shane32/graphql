@@ -4,7 +4,7 @@ import IQueryResult from "./IQueryResult";
 /**
  * Represents an JavaScript exception that occurs during a GraphQL query.
  */
-export default class GraphQLError {
+export default class GraphQLError extends Error {
   /**
    * The GraphQL errors returned by the query, if any.
    */
@@ -14,11 +14,6 @@ export default class GraphQLError {
    * The network error returned by the query, if any.
    */
   public networkError: any;
-
-  /**
-   * The error message for the query.
-   */
-  public message: string;
 
   /**
    * The response for the query that caused the error.
@@ -31,12 +26,24 @@ export default class GraphQLError {
    * @param data The response for the query that caused the error.
    */
   public constructor(data: IQueryResult<any>) {
+    const message = data.errors && data.errors.length ? data.errors[0].message : "Unknown error";
+    super(message);
+    this.name = "GraphQLError";
     this.response = data;
-
-    // Set the error message based on the response
-    this.message = data.errors && data.errors.length ? data.errors[0].message : "Unknown error";
     if (!data.networkError) {
       this.graphQLErrors = data.errors;
+    } else {
+      this.networkError = data.errors?.[0]?.extensions?.underlyingError || undefined;
     }
+
+    // Set the prototype explicitly to maintain the correct prototype chain.
+    Object.setPrototypeOf(this, GraphQLError.prototype);
+    // Preserve the previous enumerable message property for JSON serialization.
+    Object.defineProperty(this, "message", {
+      value: message,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
 }

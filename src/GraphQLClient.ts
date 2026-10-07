@@ -159,9 +159,19 @@ export default class GraphQLClient implements IGraphQLClient {
 
                 // If the response status is not valid, create a new query result object with the error message
                 if (!valid) {
+                  const message = data.status < 200 || data.status >= 300 ? data.statusText : "Invalid content type";
                   const queryRet: IQueryResult<TReturn> = {
                     networkError: true,
-                    errors: [{ message: data.statusText }],
+                    errors: [
+                      {
+                        message,
+                        extensions: {
+                          underlyingError: new Error(
+                            `Invalid response code ${data.status} and/or content type '${data.headers.get("Content-Type")}'`,
+                          ),
+                        },
+                      },
+                    ],
                     size: 1000,
                   };
                   return Promise.resolve(queryRet);
