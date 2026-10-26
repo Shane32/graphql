@@ -20,6 +20,7 @@ interface ICacheEntry {
   lastUsed: number;
   subscribers: Array<(result: IQueryResult<any> | null) => void>;
   cancelRequest?: () => void;
+  pendingReplacedEntries?: Set<ICacheEntry>;
 }
 
 /**
@@ -285,6 +286,7 @@ export default class GraphQLClient implements IGraphQLClient {
               newEntry.response.result = data;
               newEntry.response.loading = false;
               newEntry.cancelRequest = undefined;
+              newEntry.pendingReplacedEntries?.delete(newEntry);
               if (data.errors && data.errors.length) {
                 // If there were any errors, immediately expire the cache entry
                 newEntry.expires = 0;
@@ -334,8 +336,11 @@ export default class GraphQLClient implements IGraphQLClient {
         // Function to subscribe to cache entry updates
         subscribe: (callback) => {
           newEntry.subscribers.push(callback);
+          newEntry.pendingReplacedEntries?.forEach((entry) => this.cancelUnusedRequest(entry));
+          newEntry.pendingReplacedEntries?.clear();
           return () => {
             newEntry.subscribers = newEntry.subscribers.filter((x) => x !== callback);
+            if (cacheMode === "no-cache") this.cancelUnusedRequest(newEntry);
           };
         },
       };
@@ -621,6 +626,18 @@ export default class GraphQLClient implements IGraphQLClient {
     });
   };
 
+  private cancelUnusedRequest = (entry: ICacheEntry) => {
+    const cancelRequest = entry.cancelRequest;
+    if (entry.subscribers.length === 0 && cancelRequest) {
+      // Allow components to subscribe, including Strict Mode reconnections, before cancelling.
+      Promise.resolve().then(() => {
+        if (entry.subscribers.length === 0 && entry.cancelRequest === cancelRequest) {
+          cancelRequest();
+        }
+      });
+    }
+  };
+
   private getOrCreateCacheEntry = (
     queryAndVariablesString: string,
     newEntryFactory: (cacheEntry: ICacheEntry) => void,
@@ -629,11 +646,16 @@ export default class GraphQLClient implements IGraphQLClient {
     // this always adds the new entry even if the lifetime is zero
     const valueFromCache = this.cache.get(queryAndVariablesString);
     const nowDate = Date.now();
+    let pendingReplacedEntries: Set<ICacheEntry> | undefined;
     if (valueFromCache) {
       if (valueFromCache.subscribers.length > 0 || !noCache) {
         valueFromCache.lastUsed = Date.now();
         return valueFromCache;
       } else {
+        // Defer disposal until subscriptions identify which renders were committed.
+        pendingReplacedEntries = valueFromCache.pendingReplacedEntries || new Set<ICacheEntry>();
+        if (valueFromCache.cancelRequest) pendingReplacedEntries.add(valueFromCache);
+        valueFromCache.pendingReplacedEntries = pendingReplacedEntries;
         if (this.cache.delete(queryAndVariablesString)) this.cacheSize -= valueFromCache.size;
       }
     }
@@ -643,6 +665,7 @@ export default class GraphQLClient implements IGraphQLClient {
       lastUsed: nowDate,
       response: null as any,
       subscribers: [],
+      pendingReplacedEntries,
       size: 1000,
     };
     newEntryFactory(newEntry);
