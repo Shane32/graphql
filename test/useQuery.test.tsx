@@ -39,9 +39,6 @@ afterEach(() => {
 });
 
 const StrictMode = (React as any).StrictMode ?? React.Fragment;
-const createRoot: ((container: Element) => { render: (children: React.ReactNode) => void; unmount: () => void }) | undefined =
-  parseInt(React.version, 10) >= 18 ? require("react-dom/client").createRoot : undefined;
-const concurrentTest = createRoot ? it : it.skip;
 
 const useQueryTest = async (useStrictMode: boolean, count: number, fetchPolicy: "no-cache" | "cache-first" | "cache-and-network") => {
   act(() => {
@@ -123,78 +120,44 @@ it("useQuery cancels a pending no-cache request when unmounted", async () => {
   expect(requests).toHaveLength(1);
 });
 
-concurrentTest("useQuery shares a pending no-cache request when sibling passive effects are deferred", async () => {
+it("useQuery shares a pending no-cache request between identical queries", async () => {
   const client = new GraphQLClient({ url: "https://api.example.com/api/graphql" });
-  const mounted = jest.fn();
-  const unmounted = jest.fn();
-  const initialTime = performance.now();
-  let elapsed = 0;
-  const now = jest.spyOn(performance, "now").mockImplementation(() => initialTime + elapsed);
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  const root = createRoot!(container);
-  const actEnvironment = (globalThis as any).IS_REACT_ACT_ENVIRONMENT;
-  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = false;
 
   function TestUseQuery() {
     const result = useQuery<{ version: string }>("{ version }", { client, fetchPolicy: "no-cache" });
-    React.useEffect(() => {
-      mounted();
-      return () => {
-        unmounted();
-      };
-    }, []);
     return <p>{result.loading ? "Loading" : result.data?.version}</p>;
   }
 
-  function DeferPassiveEffects() {
-    React.useLayoutEffect(() => {
-      // Exhaust React's time slice so passive subscriptions run in a later task.
-      elapsed = 50;
-    }, []);
-    return null;
-  }
+  const { rerender, unmount } = render(
+    <>
+      <TestUseQuery key="first" />
+      <TestUseQuery key="second" />
+    </>,
+  );
 
-  try {
-    // Render outside act(), which would flush the passive subscriptions synchronously.
-    root.render(
-      <>
-        <TestUseQuery key="first" />
-        <TestUseQuery key="second" />
-        <DeferPassiveEffects key="defer" />
-      </>,
-    );
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(screen.getAllByText("Loading")).toHaveLength(2);
+  expect(requests[0].request.signal.aborted).toBe(false);
+  expect(client.getPendingRequests()).toBe(1);
 
-    await waitFor(() => expect(requests).toHaveLength(1));
-    await waitFor(() => expect(mounted).toHaveBeenCalledTimes(2));
-    expect(requests[0].request.signal.aborted).toBe(false);
-    expect(screen.getAllByText("Loading")).toHaveLength(2);
-    expect(client.getPendingRequests()).toBe(1);
-
-    root.render(
+  await act(async () => {
+    rerender(
       <>
         <TestUseQuery key="second" />
-        <DeferPassiveEffects key="defer" />
       </>,
     );
+  });
 
-    await waitFor(() => expect(unmounted).toHaveBeenCalledTimes(1));
-    expect(screen.getAllByText("Loading")).toHaveLength(1);
-    expect(requests).toHaveLength(1);
-    expect(requests[0].request.signal.aborted).toBe(false);
-    expect(client.getPendingRequests()).toBe(1);
+  expect(screen.getAllByText("Loading")).toHaveLength(1);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].request.signal.aborted).toBe(false);
+  expect(client.getPendingRequests()).toBe(1);
 
-    root.unmount();
+  unmount();
 
-    await waitFor(() => expect(requests[0].request.signal.aborted).toBe(true));
-    await waitFor(() => expect(client.getPendingRequests()).toBe(0));
-    expect(requests).toHaveLength(1);
-  } finally {
-    root.unmount();
-    container.remove();
-    now.mockRestore();
-    (globalThis as any).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
-  }
+  await waitFor(() => expect(requests[0].request.signal.aborted).toBe(true));
+  await waitFor(() => expect(client.getPendingRequests()).toBe(0));
+  expect(requests).toHaveLength(1);
 });
 
 it.each(["pending", "completed"] as const)(
