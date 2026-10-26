@@ -20,7 +20,6 @@ interface ICacheEntry {
   lastUsed: number;
   subscribers: Array<(result: IQueryResult<any> | null) => void>;
   cancelRequest?: () => void;
-  pendingReplacedEntries?: Set<ICacheEntry>;
 }
 
 /**
@@ -286,7 +285,6 @@ export default class GraphQLClient implements IGraphQLClient {
               newEntry.response.result = data;
               newEntry.response.loading = false;
               newEntry.cancelRequest = undefined;
-              newEntry.pendingReplacedEntries?.delete(newEntry);
               if (data.errors && data.errors.length) {
                 // If there were any errors, immediately expire the cache entry
                 newEntry.expires = 0;
@@ -336,8 +334,6 @@ export default class GraphQLClient implements IGraphQLClient {
         // Function to subscribe to cache entry updates
         subscribe: (callback) => {
           newEntry.subscribers.push(callback);
-          newEntry.pendingReplacedEntries?.forEach((entry) => this.cancelUnusedRequest(entry));
-          newEntry.pendingReplacedEntries?.clear();
           return () => {
             newEntry.subscribers = newEntry.subscribers.filter((x) => x !== callback);
             if (cacheMode === "no-cache") this.cancelUnusedRequest(newEntry);
@@ -349,9 +345,8 @@ export default class GraphQLClient implements IGraphQLClient {
     };
     // Get or create a cache entry using the factory function
     const newEntry = this.getOrCreateCacheEntry(queryAndVariablesString, newEntryFactory, cacheMode === "no-cache");
-    // If there are no subscribers and the cache mode is "cache-and-network" or the cache entry has expired, refresh the cache entry
-    // (note: 'no-cache' would have already created a new request)
-    // But for "cache-first" mode, or subscribers to a request whose entry has not expired, does not need a refresh
+    // Refresh an unused cache-and-network or expired entry.
+    // All cache modes reuse pending requests; no-cache replaces completed, unused entries.
     if (newEntry.subscribers.length === 0 && (cacheMode === "cache-and-network" || newEntry.expires < Date.now())) {
       newEntry.response.refresh();
     }
@@ -632,6 +627,10 @@ export default class GraphQLClient implements IGraphQLClient {
       // Allow components to subscribe, including Strict Mode reconnections, before cancelling.
       Promise.resolve().then(() => {
         if (entry.subscribers.length === 0 && entry.cancelRequest === cancelRequest) {
+          if (this.cache.get(entry.queryAndVariablesString) === entry) {
+            this.cache.delete(entry.queryAndVariablesString);
+            this.cacheSize -= entry.size;
+          }
           cancelRequest();
         }
       });
@@ -646,16 +645,11 @@ export default class GraphQLClient implements IGraphQLClient {
     // this always adds the new entry even if the lifetime is zero
     const valueFromCache = this.cache.get(queryAndVariablesString);
     const nowDate = Date.now();
-    let pendingReplacedEntries: Set<ICacheEntry> | undefined;
     if (valueFromCache) {
-      if (valueFromCache.subscribers.length > 0 || !noCache) {
+      if (valueFromCache.subscribers.length > 0 || valueFromCache.response.loading || !noCache) {
         valueFromCache.lastUsed = Date.now();
         return valueFromCache;
       } else {
-        // Defer disposal until subscriptions identify which renders were committed.
-        pendingReplacedEntries = valueFromCache.pendingReplacedEntries || new Set<ICacheEntry>();
-        if (valueFromCache.cancelRequest) pendingReplacedEntries.add(valueFromCache);
-        valueFromCache.pendingReplacedEntries = pendingReplacedEntries;
         if (this.cache.delete(queryAndVariablesString)) this.cacheSize -= valueFromCache.size;
       }
     }
@@ -665,7 +659,6 @@ export default class GraphQLClient implements IGraphQLClient {
       lastUsed: nowDate,
       response: null as any,
       subscribers: [],
-      pendingReplacedEntries,
       size: 1000,
     };
     newEntryFactory(newEntry);

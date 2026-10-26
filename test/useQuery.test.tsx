@@ -1,7 +1,6 @@
 import * as React from "react";
 import { render } from "@testing-library/react";
 import { act } from "react-dom/test-utils";
-import { createRoot } from "react-dom/client";
 import GraphQLClient from "../src/GraphQLClient";
 import GraphQLContext from "../src/GraphQLContext";
 import useQuery from "../src/useQuery";
@@ -40,6 +39,9 @@ afterEach(() => {
 });
 
 const StrictMode = (React as any).StrictMode ?? React.Fragment;
+const createRoot: ((container: Element) => { render: (children: React.ReactNode) => void; unmount: () => void }) | undefined =
+  parseInt(React.version, 10) >= 18 ? require("react-dom/client").createRoot : undefined;
+const concurrentTest = createRoot ? it : it.skip;
 
 const useQueryTest = async (useStrictMode: boolean, count: number, fetchPolicy: "no-cache" | "cache-first" | "cache-and-network") => {
   act(() => {
@@ -121,15 +123,16 @@ it("useQuery cancels a pending no-cache request when unmounted", async () => {
   expect(requests).toHaveLength(1);
 });
 
-it("useQuery keeps pending no-cache sibling requests active when passive effects are deferred", async () => {
+concurrentTest("useQuery shares a pending no-cache request when sibling passive effects are deferred", async () => {
   const client = new GraphQLClient({ url: "https://api.example.com/api/graphql" });
   const mounted = jest.fn();
+  const unmounted = jest.fn();
   const initialTime = performance.now();
   let elapsed = 0;
   const now = jest.spyOn(performance, "now").mockImplementation(() => initialTime + elapsed);
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const root = createRoot(container);
+  const root = createRoot!(container);
   const actEnvironment = (globalThis as any).IS_REACT_ACT_ENVIRONMENT;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = false;
 
@@ -137,6 +140,9 @@ it("useQuery keeps pending no-cache sibling requests active when passive effects
     const result = useQuery<{ version: string }>("{ version }", { client, fetchPolicy: "no-cache" });
     React.useEffect(() => {
       mounted();
+      return () => {
+        unmounted();
+      };
     }, []);
     return <p>{result.loading ? "Loading" : result.data?.version}</p>;
   }
@@ -153,23 +159,36 @@ it("useQuery keeps pending no-cache sibling requests active when passive effects
     // Render outside act(), which would flush the passive subscriptions synchronously.
     root.render(
       <>
-        <TestUseQuery />
-        <TestUseQuery />
-        <DeferPassiveEffects />
+        <TestUseQuery key="first" />
+        <TestUseQuery key="second" />
+        <DeferPassiveEffects key="defer" />
       </>,
     );
 
-    await waitFor(() => expect(requests).toHaveLength(2));
+    await waitFor(() => expect(requests).toHaveLength(1));
     await waitFor(() => expect(mounted).toHaveBeenCalledTimes(2));
-    expect(requests.every((request) => !request.request.signal.aborted)).toBe(true);
+    expect(requests[0].request.signal.aborted).toBe(false);
     expect(screen.getAllByText("Loading")).toHaveLength(2);
-    expect(client.getPendingRequests()).toBe(2);
+    expect(client.getPendingRequests()).toBe(1);
+
+    root.render(
+      <>
+        <TestUseQuery key="second" />
+        <DeferPassiveEffects key="defer" />
+      </>,
+    );
+
+    await waitFor(() => expect(unmounted).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByText("Loading")).toHaveLength(1);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].request.signal.aborted).toBe(false);
+    expect(client.getPendingRequests()).toBe(1);
 
     root.unmount();
 
-    await waitFor(() => expect(requests.every((request) => request.request.signal.aborted)).toBe(true));
+    await waitFor(() => expect(requests[0].request.signal.aborted).toBe(true));
     await waitFor(() => expect(client.getPendingRequests()).toBe(0));
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(1);
   } finally {
     root.unmount();
     container.remove();
@@ -178,12 +197,49 @@ it("useQuery keeps pending no-cache sibling requests active when passive effects
   }
 });
 
-it("useQuery works with strict mode", () => useQueryTest(true, 2, "no-cache"));
+it.each(["pending", "completed"] as const)(
+  "useQuery sends a fresh no-cache request after unmounting a %s request",
+  async (requestState) => {
+    const client = new GraphQLClient({ url: "https://api.example.com/api/graphql" });
+
+    function TestUseQuery() {
+      const result = useQuery<{ version: string }>("{ version }", { client, fetchPolicy: "no-cache" });
+      return <p>{result.loading ? "Loading" : result.data?.version}</p>;
+    }
+
+    const { unmount } = render(<TestUseQuery />);
+    await waitFor(() => expect(requests).toHaveLength(1));
+
+    if (requestState === "completed") {
+      requests[0].resolve(new Response(JSON.stringify({ data: { version: "old" } }), { status: 200 }));
+      await waitFor(() => expect(screen.getByText("old")).toBeInTheDocument());
+    } else {
+      // Remount during abort, before the cancelled request's result promise settles.
+      requests[0].request.signal.addEventListener("abort", () => render(<TestUseQuery />), { once: true });
+    }
+
+    unmount();
+    if (requestState === "completed") render(<TestUseQuery />);
+
+    await waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[0].request.signal.aborted).toBe(requestState === "pending");
+    expect(requests[1].request.signal.aborted).toBe(false);
+    expect(screen.getByText("Loading")).toBeInTheDocument();
+    await waitFor(() => expect(client.getPendingRequests()).toBe(1));
+
+    requests[1].resolve(new Response(JSON.stringify({ data: { version: "fresh" } }), { status: 200 }));
+    await waitFor(() => expect(screen.getByText("fresh")).toBeInTheDocument());
+    expect(requests).toHaveLength(2);
+    expect(client.getPendingRequests()).toBe(0);
+  },
+);
+
+it("useQuery works with strict mode", () => useQueryTest(true, 1, "no-cache"));
 it("useQuery works with strict mode, cache-first", () => useQueryTest(true, 1, "cache-first"));
 it("useQuery works with strict mode, cache-and-network", () => useQueryTest(true, 1, "cache-and-network"));
 
 it.each(["no-cache", "cache-first", "cache-and-network"] as const)(
-  "useQuery keeps only one active request in strict mode with %s",
+  "useQuery shares one pending request in strict mode with %s",
   async (fetchPolicy) => {
     const client = new GraphQLClient({ url: "https://api.example.com/api/graphql" });
 
@@ -198,16 +254,13 @@ it.each(["no-cache", "cache-first", "cache-and-network"] as const)(
       </StrictMode>,
     );
 
-    const expectedRequests = fetchPolicy === "no-cache" ? 2 : 1;
-    await waitFor(() => expect(requests).toHaveLength(expectedRequests));
+    await waitFor(() => expect(requests).toHaveLength(1));
     expect(screen.getByText("Loading")).toBeInTheDocument();
-    expect(requests[0].request.signal.aborted).toBe(fetchPolicy === "no-cache");
-    const activeRequests = requests.filter((request) => !request.request.signal.aborted);
-    expect(activeRequests).toHaveLength(1);
+    expect(requests[0].request.signal.aborted).toBe(false);
     await waitFor(() => expect(client.getPendingRequests()).toBe(1));
 
     // Keep the response pending until Strict Mode has finished replaying the effects.
-    activeRequests[0].resolve(
+    requests[0].resolve(
       new Response(JSON.stringify({ data: { version: "12345" } }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -215,7 +268,7 @@ it.each(["no-cache", "cache-first", "cache-and-network"] as const)(
     );
 
     await waitFor(() => expect(screen.getByText("12345")).toBeInTheDocument());
-    expect(requests).toHaveLength(expectedRequests);
+    expect(requests).toHaveLength(1);
     expect(client.getPendingRequests()).toBe(0);
   },
 );
@@ -290,11 +343,11 @@ const useQueryWithHashTest = async (
 };
 
 it("useQuery with hash works", () => useQueryWithHashTest(false, 1, "no-cache", false));
-it("useQuery with hash works with strict mode", () => useQueryWithHashTest(true, 2, "no-cache", false));
+it("useQuery with hash works with strict mode", () => useQueryWithHashTest(true, 1, "no-cache", false));
 it("useQuery with hash works with strict mode, cache-first", () => useQueryWithHashTest(true, 1, "cache-first", false));
 it("useQuery with hash works with strict mode, cache-and-network", () => useQueryWithHashTest(true, 1, "cache-and-network", false));
 
 it("useQuery with hash in url works", () => useQueryWithHashTest(false, 1, "no-cache", true));
-it("useQuery with hash in url works with strict mode", () => useQueryWithHashTest(true, 2, "no-cache", true));
+it("useQuery with hash in url works with strict mode", () => useQueryWithHashTest(true, 1, "no-cache", true));
 it("useQuery with hash in url works with strict mode, cache-first", () => useQueryWithHashTest(true, 1, "cache-first", true));
 it("useQuery with hash in url works with strict mode, cache-and-network", () => useQueryWithHashTest(true, 1, "cache-and-network", true));
