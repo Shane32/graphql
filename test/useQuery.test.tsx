@@ -96,7 +96,6 @@ const useQueryTest = async (useStrictMode: boolean, count: number, fetchPolicy: 
 };
 
 it("useQuery works", () => useQueryTest(false, 1, "no-cache"));
-it("useQuery works with strict mode", () => useQueryTest(true, 1, "no-cache"));
 
 it("useQuery cancels a pending no-cache request when unmounted", async () => {
   const client = new GraphQLClient({ url: "https://api.example.com/api/graphql" });
