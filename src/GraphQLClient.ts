@@ -336,6 +336,7 @@ export default class GraphQLClient implements IGraphQLClient {
           newEntry.subscribers.push(callback);
           return () => {
             newEntry.subscribers = newEntry.subscribers.filter((x) => x !== callback);
+            if (cacheMode === "no-cache") this.cancelUnusedRequest(newEntry);
           };
         },
       };
@@ -344,9 +345,8 @@ export default class GraphQLClient implements IGraphQLClient {
     };
     // Get or create a cache entry using the factory function
     const newEntry = this.getOrCreateCacheEntry(queryAndVariablesString, newEntryFactory, cacheMode === "no-cache");
-    // If there are no subscribers and the cache mode is "cache-and-network" or the cache entry has expired, refresh the cache entry
-    // (note: 'no-cache' would have already created a new request)
-    // But for "cache-first" mode, or subscribers to a request whose entry has not expired, does not need a refresh
+    // Refresh an unused cache-and-network or expired entry.
+    // All cache modes reuse pending requests; no-cache replaces completed, unused entries.
     if (newEntry.subscribers.length === 0 && (cacheMode === "cache-and-network" || newEntry.expires < Date.now())) {
       newEntry.response.refresh();
     }
@@ -621,6 +621,22 @@ export default class GraphQLClient implements IGraphQLClient {
     });
   };
 
+  private cancelUnusedRequest = (entry: ICacheEntry) => {
+    const cancelRequest = entry.cancelRequest;
+    if (entry.subscribers.length === 0 && cancelRequest) {
+      // Allow components to subscribe, including Strict Mode reconnections, before cancelling.
+      Promise.resolve().then(() => {
+        if (entry.subscribers.length === 0 && entry.cancelRequest === cancelRequest) {
+          if (this.cache.get(entry.queryAndVariablesString) === entry) {
+            this.cache.delete(entry.queryAndVariablesString);
+            this.cacheSize -= entry.size;
+          }
+          cancelRequest();
+        }
+      });
+    }
+  };
+
   private getOrCreateCacheEntry = (
     queryAndVariablesString: string,
     newEntryFactory: (cacheEntry: ICacheEntry) => void,
@@ -630,7 +646,7 @@ export default class GraphQLClient implements IGraphQLClient {
     const valueFromCache = this.cache.get(queryAndVariablesString);
     const nowDate = Date.now();
     if (valueFromCache) {
-      if (valueFromCache.subscribers.length > 0 || !noCache) {
+      if (valueFromCache.subscribers.length > 0 || valueFromCache.response.loading || !noCache) {
         valueFromCache.lastUsed = Date.now();
         return valueFromCache;
       } else {
