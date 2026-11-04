@@ -1,19 +1,33 @@
 import * as React from "react";
-import GraphQLCachePolicyContext from "./GraphQLCachePolicyContext";
-import IGraphQLConfiguration from "./IGraphQLConfiguration";
+import GraphQLContext from "./GraphQLContext";
+import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
 
-interface IGraphQLCachePolicyProps {
-  /** The default fetch policy for descendant useQuery hooks. */
-  fetchPolicy: NonNullable<IGraphQLConfiguration["defaultFetchPolicy"]>;
+interface IGraphQLCachePolicyProps extends NonNullable<IGraphQLDefaultOptions["query"]> {
   children?: React.ReactNode;
 }
 
 /**
- * Sets the default fetch policy for descendant useQuery hooks without changing the client.
- * An explicit query fetchPolicy takes precedence; nested providers use the nearest policy.
+ * Sets default query cache options through GraphQLContext without changing the clients.
+ * Explicit query options take precedence; omitted props inherit the parent defaults.
  */
-const GraphQLCachePolicy = ({ fetchPolicy, children }: IGraphQLCachePolicyProps) => (
-  <GraphQLCachePolicyContext.Provider value={fetchPolicy}>{children}</GraphQLCachePolicyContext.Provider>
-);
+const GraphQLCachePolicy = ({ fetchPolicy, cacheTime, children }: IGraphQLCachePolicyProps) => {
+  const context = React.useContext(GraphQLContext);
+  const value = React.useMemo(
+    () => ({
+      ...context,
+      defaultOptions: {
+        ...context?.defaultOptions,
+        query: {
+          ...context?.defaultOptions?.query,
+          fetchPolicy: fetchPolicy ?? context?.defaultOptions?.query?.fetchPolicy,
+          cacheTime: cacheTime ?? context?.defaultOptions?.query?.cacheTime,
+        },
+      },
+    }),
+    [context, fetchPolicy, cacheTime],
+  );
+
+  return <GraphQLContext.Provider value={value}>{children}</GraphQLContext.Provider>;
+};
 
 export default GraphQLCachePolicy;

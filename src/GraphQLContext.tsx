@@ -2,7 +2,7 @@ import * as React from "react";
 import IGraphQLContext from "./IGraphQLContext";
 
 /**
- * A React context that provides access to one or more configured GraphQL clients.
+ * A React context that provides configured GraphQL clients and default hook options.
  *
  * @type {React.Context<IGraphQLContext>}
  */
