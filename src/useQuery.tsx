@@ -7,6 +7,7 @@ import IQueryResult from "./IQueryResult";
 import TypedDocumentString from "./TypedDocumentString";
 import useGraphQLClient from "./useGraphQLClient";
 import createRequest from "./createRequest";
+import GraphQLCachePolicyContext from "./GraphQLCachePolicyContext";
 
 /**
  * Represents the return type of the `useQuery` hook.
@@ -45,7 +46,7 @@ interface IOptions<TVariables> {
   guest?: boolean;
   /** The client to use for the query, or the name of the client. */
   client?: IGraphQLClient | string;
-  /** The fetch policy to use for the query. */
+  /** The fetch policy to use for the query, overriding any inherited GraphQLCachePolicy. */
   fetchPolicy?: "cache-first" | "no-cache" | "cache-and-network";
   /** Whether to skip execution of the query. */
   skip?: boolean;
@@ -76,6 +77,8 @@ const useQuery: <TResult, TVariables = unknown>(
   options?: IOptions<TVariables>,
 ) => {
   const client = useGraphQLClient(options && options.client, options && options.guest);
+  const inheritedFetchPolicy = React.useContext(GraphQLCachePolicyContext);
+  const fetchPolicy = options?.fetchPolicy ?? inheritedFetchPolicy;
   const currentVariables = options?.variables;
   const lastQueryResponseRef = React.useRef<IQueryResult<TResult> | undefined>(undefined);
   const queryRet = React.useMemo<IQueryResponse<TResult> | null>(() => {
@@ -89,7 +92,7 @@ const useQuery: <TResult, TVariables = unknown>(
       extensions: options?.extensions,
     });
 
-    return client.executeQuery<TResult, TVariables>(request, options?.fetchPolicy);
+    return client.executeQuery<TResult, TVariables>(request, fetchPolicy);
   }, [
     client,
     options?.skip,
@@ -97,7 +100,7 @@ const useQuery: <TResult, TVariables = unknown>(
     JSON.stringify(currentVariables || null),
     options?.operationName,
     JSON.stringify(options?.extensions || null),
-    options?.fetchPolicy,
+    fetchPolicy,
   ]);
   const [data, setData] = React.useState(queryRet?.result || null);
 

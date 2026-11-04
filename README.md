@@ -236,6 +236,25 @@ const ProductComponent = ({ productId }) => {
 };
 ```
 
+### Default cache policy for child components
+
+Wrap a component tree in `GraphQLCachePolicy` to set the default fetch policy for all descendant `useQuery` hooks:
+
+```tsx
+import { GraphQLCachePolicy } from '@shane32/graphql';
+
+<GraphQLContext.Provider value={{ client }}>
+  <GraphQLCachePolicy fetchPolicy="cache-and-network">
+    <ProductList />
+    <ProductDetails />
+  </GraphQLCachePolicy>
+</GraphQLContext.Provider>
+```
+
+The `fetchPolicy` prop accepts `'cache-first'`, `'no-cache'`, or `'cache-and-network'`. An explicit `useQuery` option takes precedence over the nearest `GraphQLCachePolicy`. Without either, the client's `defaultFetchPolicy` applies.
+
+Policies can be nested and apply to queries using default, guest, named, or explicitly supplied clients. Changing the prop updates the policy used by descendant hooks. Siblings outside the wrapper and the client's configuration are unchanged; mutations, subscriptions, and direct client calls are unaffected. Queries still follow the client's normal rules for sharing active and pending requests.
+
 ### useMutation hook
 
 ```tsx
@@ -546,6 +565,15 @@ This is useful when you need to create request objects outside of the provided h
 | `clearCache` | Clear the query cache | |
 | `resetStore` | Reset and refresh all cached queries | Should be used anytime the user is logged in/out to refresh permissions |
 
+### GraphQLCachePolicy
+
+Provides a default fetch policy for descendant `useQuery` hooks. See [Default cache policy for child components](#default-cache-policy-for-child-components) for usage and precedence.
+
+| Prop | Description |
+|------|-------------|
+| `fetchPolicy` (required) | `'cache-first'`, `'no-cache'`, or `'cache-and-network'` |
+| `children` | The component tree that inherits this default |
+
 ### React Hooks
 
 #### useQuery<TData, TVariables>
@@ -559,7 +587,7 @@ Execute a GraphQL query with caching and automatic re-rendering.
 | `query` (required) | GraphQL query string or typed document |
 | `options` | Query options |
 | `options.variables` | Query variables |
-| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'` |
+| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'`. Defaults to the nearest `GraphQLCachePolicy`, then the client default |
 | `options.client` | Client instance or name from context |
 | `options.guest` | Whether to use the guest client |
 | `options.skip` | Whether to skip execution of the query |

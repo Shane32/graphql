@@ -1,5 +1,6 @@
 export { default as GraphQLClient } from "./GraphQLClient";
 export { default as GraphQLContext } from "./GraphQLContext";
+export { default as GraphQLCachePolicy } from "./GraphQLCachePolicy";
 export { default as IGraphQLContext } from "./IGraphQLContext";
 export { default as IGraphQLConfiguration } from "./IGraphQLConfiguration";
 export { default as IRequest } from "./IRequest";
