@@ -41,7 +41,7 @@ interface IUseQueryRet<TResult> {
  * @template TResult The expected result type of the query.
  * @template TVariables The expected variables type of the query.
  */
-interface IOptions<TVariables> extends NonNullable<IGraphQLDefaultOptions["query"]> {
+interface IOptions<TVariables> extends IGraphQLDefaultOptions {
   /** Whether to use the guest client. */
   guest?: boolean;
   /** The client to use for the query, or the name of the client. */
@@ -75,9 +75,8 @@ const useQuery: <TResult, TVariables = unknown>(
   options?: IOptions<TVariables>,
 ) => {
   const { client, defaultOptions } = useGraphQLClient(options && options.client, options && options.guest);
-  const defaults = defaultOptions?.query;
-  const fetchPolicy = options?.fetchPolicy ?? defaults?.fetchPolicy;
-  const cacheTime = options?.cacheTime ?? defaults?.cacheTime;
+  const fetchPolicy = options?.fetchPolicy ?? defaultOptions.fetchPolicy;
+  const cacheTime = options?.cacheTime ?? defaultOptions.cacheTime;
   const currentVariables = options?.variables;
   const lastQueryResponseRef = React.useRef<IQueryResult<TResult> | undefined>(undefined);
   const queryRet = React.useMemo<IQueryResponse<TResult> | null>(() => {

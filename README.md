@@ -152,10 +152,8 @@ const context: IGraphQLContext = {
 
 // Optional defaults for descendant hooks, provided independently of the clients.
 const defaultOptions: IGraphQLDefaultOptions = {
-    query: {
-        fetchPolicy: 'cache-first',
-        cacheTime: 60_000                // milliseconds
-    }
+    fetchPolicy: 'cache-first',
+    cacheTime: 60_000                    // milliseconds
 };
 ```
 
@@ -267,7 +265,7 @@ import { GraphQLCachePolicy } from '@shane32/graphql';
 
 Both props are optional. `fetchPolicy` accepts `'cache-first'`, `'no-cache'`, or `'cache-and-network'`; `cacheTime` specifies the cache duration in milliseconds, including `0`. Nested wrappers inherit each omitted option independently, so `ProductDetails` above uses `'cache-and-network'` with a five-second cache duration.
 
-The wrapper merges its options into `GraphQLDefaultOptionsContext` under `query`. You can also supply these defaults directly through `GraphQLDefaultOptionsContext.Provider`, as shown in [Advanced Configuration](#advanced-configuration). Each option resolves in this order: an explicit `useQuery` option, the inherited options context default, then the client's `defaultFetchPolicy` or `defaultCacheTime`.
+The wrapper merges its options into `GraphQLDefaultOptionsContext`. You can also supply these defaults directly through `GraphQLDefaultOptionsContext.Provider`, as shown in [Advanced Configuration](#advanced-configuration). Each option resolves in this order: an explicit `useQuery` option, the inherited options context default, then the client's `defaultFetchPolicy` or `defaultCacheTime`.
 
 Defaults apply to queries using default, guest, named, or explicitly supplied clients. Changing a prop updates the corresponding default used by descendant hooks. Siblings outside the wrapper and the client's configuration are unchanged; mutations, subscriptions, and direct client calls are unaffected. Queries still follow the client's normal rules for sharing active and pending requests. Nested client providers preserve these defaults because clients and hook defaults use separate contexts. A nested `GraphQLDefaultOptionsContext.Provider` replaces the options value; use `GraphQLCachePolicy` to merge cache options with inherited defaults.
 
@@ -587,14 +585,12 @@ Provides hook defaults independently of the clients in `GraphQLContext`. Its val
 
 ```typescript
 const defaultOptions: IGraphQLDefaultOptions = {
-    query: {
-        fetchPolicy: 'cache-first',
-        cacheTime: 60_000
-    }
+    fetchPolicy: 'cache-first',
+    cacheTime: 60_000
 };
 ```
 
-Both `query` and its properties are optional. Provide this value through `GraphQLDefaultOptionsContext.Provider` or merge inherited query defaults with `GraphQLCachePolicy`.
+Both properties are optional. Provide this value through `GraphQLDefaultOptionsContext.Provider` or merge inherited defaults with `GraphQLCachePolicy`.
 
 ### GraphQLCachePolicy
 
@@ -619,8 +615,8 @@ Execute a GraphQL query with caching and automatic re-rendering.
 | `query` (required) | GraphQL query string or typed document |
 | `options` | Query options |
 | `options.variables` | Query variables |
-| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'`. Defaults to `query.fetchPolicy` from `GraphQLDefaultOptionsContext`, then the client's `defaultFetchPolicy` |
-| `options.cacheTime` | Cache duration in milliseconds, including `0`. Defaults to `query.cacheTime` from `GraphQLDefaultOptionsContext`, then the client's `defaultCacheTime` |
+| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'`. Defaults to `fetchPolicy` from `GraphQLDefaultOptionsContext`, then the client's `defaultFetchPolicy` |
+| `options.cacheTime` | Cache duration in milliseconds, including `0`. Defaults to `cacheTime` from `GraphQLDefaultOptionsContext`, then the client's `defaultCacheTime` |
 | `options.client` | Client instance or name from context |
 | `options.guest` | Whether to use the guest client |
 | `options.skip` | Whether to skip execution of the query |

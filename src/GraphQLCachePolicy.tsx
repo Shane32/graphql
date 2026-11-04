@@ -2,7 +2,7 @@ import * as React from "react";
 import GraphQLDefaultOptionsContext from "./GraphQLDefaultOptionsContext";
 import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
 
-interface IGraphQLCachePolicyProps extends NonNullable<IGraphQLDefaultOptions["query"]> {
+interface IGraphQLCachePolicyProps extends IGraphQLDefaultOptions {
   children?: React.ReactNode;
 }
 
@@ -15,11 +15,8 @@ const GraphQLCachePolicy = ({ fetchPolicy, cacheTime, children }: IGraphQLCacheP
   const value = React.useMemo(
     () => ({
       ...defaultOptions,
-      query: {
-        ...defaultOptions.query,
-        fetchPolicy: fetchPolicy ?? defaultOptions.query?.fetchPolicy,
-        cacheTime: cacheTime ?? defaultOptions.query?.cacheTime,
-      },
+      fetchPolicy: fetchPolicy ?? defaultOptions.fetchPolicy,
+      cacheTime: cacheTime ?? defaultOptions.cacheTime,
     }),
     [defaultOptions, fetchPolicy, cacheTime],
   );
