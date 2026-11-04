@@ -76,7 +76,7 @@ const useSubscription: IUseSubscription = <TResult, TVariables = unknown>(
   query: string | TypedDocumentString<TResult, TVariables>,
   options?: IUseSubscriptionOptions<TResult, TVariables>,
 ) => {
-  const { client } = useGraphQLClient(options && options.client, options && options.guest);
+  const client = useGraphQLClient(options && options.client, options && options.guest);
 
   // Store callback references in refs to always use the latest versions
   const onDataRef = useRef(options?.onData);

@@ -8,6 +8,7 @@ import TypedDocumentString from "./TypedDocumentString";
 import useGraphQLClient from "./useGraphQLClient";
 import createRequest from "./createRequest";
 import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
+import GraphQLDefaultOptionsContext from "./GraphQLDefaultOptionsContext";
 
 /**
  * Represents the return type of the `useQuery` hook.
@@ -74,7 +75,8 @@ const useQuery: <TResult, TVariables = unknown>(
   query: string | TypedDocumentString<TResult, TVariables>,
   options?: IOptions<TVariables>,
 ) => {
-  const { client, defaultOptions } = useGraphQLClient(options && options.client, options && options.guest);
+  const client = useGraphQLClient(options && options.client, options && options.guest);
+  const defaultOptions = React.useContext(GraphQLDefaultOptionsContext);
   const fetchPolicy = options?.fetchPolicy ?? defaultOptions.fetchPolicy;
   const cacheTime = options?.cacheTime ?? defaultOptions.cacheTime;
   const currentVariables = options?.variables;

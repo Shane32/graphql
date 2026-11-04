@@ -1,19 +1,17 @@
 import { useContext } from "react";
 import GraphQLContext from "./GraphQLContext";
-import GraphQLDefaultOptionsContext from "./GraphQLDefaultOptionsContext";
 import IGraphQLClient from "./IGraphQLClient";
 
 /**
- * Returns the configured GraphQL client and default hook options from their contexts.
+ * Returns the configured GraphQL client for the current context, or throws an error if the client is not found.
  *
  * @param {IGraphQLClient | string} client The name of the client to use, or the client itself.
  * @param {boolean} guest Whether to use the guest client.
- * @returns The resolved client and inherited default hook options.
+ * @returns {IGraphQLClient} The configured GraphQL client for the current context.
  * @throws {Error} If the specified client is not found in the context.
  */
 const useGraphQLClient = (client?: IGraphQLClient | string, guest?: boolean) => {
   const context = useContext(GraphQLContext);
-  const defaultOptions = useContext(GraphQLDefaultOptionsContext);
   let client2 = typeof client !== "string" && client;
 
   // If a specific client was not provided, look it up in the context
@@ -26,7 +24,7 @@ const useGraphQLClient = (client?: IGraphQLClient | string, guest?: boolean) => 
     }
   }
 
-  return { client: client2, defaultOptions };
+  return client2;
 };
 
 export default useGraphQLClient;
