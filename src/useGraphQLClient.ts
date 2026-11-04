@@ -3,11 +3,11 @@ import GraphQLContext from "./GraphQLContext";
 import IGraphQLClient from "./IGraphQLClient";
 
 /**
- * Returns the configured GraphQL client for the current context, or throws an error if the client is not found.
+ * Returns the configured GraphQL client and default hook options from the current context.
  *
  * @param {IGraphQLClient | string} client The name of the client to use, or the client itself.
  * @param {boolean} guest Whether to use the guest client.
- * @returns {IGraphQLClient} The configured GraphQL client for the current context.
+ * @returns The resolved client and the context's default hook options.
  * @throws {Error} If the specified client is not found in the context.
  */
 const useGraphQLClient = (client?: IGraphQLClient | string, guest?: boolean) => {
@@ -25,7 +25,7 @@ const useGraphQLClient = (client?: IGraphQLClient | string, guest?: boolean) => 
     client2 = namedClient;
   }
 
-  return client2;
+  return { client: client2, defaultOptions: context?.defaultOptions };
 };
 
 export default useGraphQLClient;

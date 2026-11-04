@@ -7,7 +7,6 @@ import IQueryResult from "./IQueryResult";
 import TypedDocumentString from "./TypedDocumentString";
 import useGraphQLClient from "./useGraphQLClient";
 import createRequest from "./createRequest";
-import GraphQLContext from "./GraphQLContext";
 import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
 
 /**
@@ -75,8 +74,8 @@ const useQuery: <TResult, TVariables = unknown>(
   query: string | TypedDocumentString<TResult, TVariables>,
   options?: IOptions<TVariables>,
 ) => {
-  const client = useGraphQLClient(options && options.client, options && options.guest);
-  const defaults = React.useContext(GraphQLContext)?.defaultOptions?.query;
+  const { client, defaultOptions } = useGraphQLClient(options && options.client, options && options.guest);
+  const defaults = defaultOptions?.query;
   const fetchPolicy = options?.fetchPolicy ?? defaults?.fetchPolicy;
   const cacheTime = options?.cacheTime ?? defaults?.cacheTime;
   const currentVariables = options?.variables;

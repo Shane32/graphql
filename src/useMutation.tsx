@@ -45,7 +45,7 @@ const useMutation: IUseMutation = <TResult, TVariables>(
     extensions?: {} | null;
   },
 ) => {
-  const client = useGraphQLClient(options && options.client, options && options.guest);
+  const { client } = useGraphQLClient(options && options.client, options && options.guest);
   /**
    * Executes the mutation with the specified variables.
    *

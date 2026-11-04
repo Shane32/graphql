@@ -113,7 +113,7 @@ const useAutoSubscription = <TResult, TVariables = unknown>(
   // Use the underlying subscription hook
   const [subscribe] = useSubscription(query, subscriptionOptions);
 
-  const client = useGraphQLClient(options && options.client, options && options.guest);
+  const { client } = useGraphQLClient(options && options.client, options && options.guest);
   const effectiveOptions = combineSubscriptionOptions(client.defaultSubscriptionOptions, options);
   const reconnectionStrategy = effectiveOptions.reconnectionStrategy ?? 5000; // Default to 5 second fixed delay
 
