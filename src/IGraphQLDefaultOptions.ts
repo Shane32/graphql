@@ -1,6 +1,6 @@
 import IGraphQLConfiguration from "./IGraphQLConfiguration";
 
-/** Default options inherited by hooks through GraphQLContext. */
+/** Default options inherited by hooks through GraphQLDefaultOptionsContext. */
 interface IGraphQLDefaultOptions {
   /** Default options for useQuery hooks. */
   query?: {

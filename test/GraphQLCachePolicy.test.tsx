@@ -1,7 +1,15 @@
 import * as React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/extend-expect";
-import { GraphQLCachePolicy, GraphQLClient, GraphQLContext, useQuery } from "../src";
+import {
+  GraphQLCachePolicy,
+  GraphQLClient,
+  GraphQLContext,
+  GraphQLDefaultOptionsContext,
+  IGraphQLContext,
+  IGraphQLDefaultOptions,
+  useQuery,
+} from "../src";
 
 type FetchPolicy = React.ComponentProps<typeof GraphQLCachePolicy>["fetchPolicy"];
 
@@ -37,6 +45,21 @@ const Query = ({
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+it("restricts additional GraphQLContext properties to clients", () => {
+  const client = createClient();
+  const context: IGraphQLContext = { client, arbitraryClient: client, defaultOptions: client };
+  const defaults: IGraphQLDefaultOptions = { query: { cacheTime: 1000 } };
+  const invalidContext: IGraphQLContext = {
+    client,
+    // @ts-expect-error Default options objects cannot be assigned to additional client properties.
+    arbitraryClient: defaults,
+  };
+
+  expect(context.arbitraryClient).toBe(client);
+  expect(context.defaultOptions).toBe(client);
+  expect(invalidContext.client).toBe(client);
 });
 
 it.each(["cache-first", "no-cache", "cache-and-network"] as const)(
@@ -155,12 +178,12 @@ it("supports an explicitly supplied client without a parent GraphQLContext provi
   expect(client.executeQuery).toHaveBeenCalledWith(expect.anything(), "no-cache", 250);
 });
 
-it("reads query defaults configured directly on GraphQLContext", () => {
+it("reads query defaults configured directly on GraphQLDefaultOptionsContext", () => {
   const client = createClient();
   render(
-    <GraphQLContext.Provider value={{ client, defaultOptions: { query: { fetchPolicy: "no-cache", cacheTime: 1000 } } }}>
-      <Query />
-    </GraphQLContext.Provider>,
+    <GraphQLDefaultOptionsContext.Provider value={{ query: { fetchPolicy: "no-cache", cacheTime: 1000 } }}>
+      <Query options={{ client }} />
+    </GraphQLDefaultOptionsContext.Provider>,
   );
 
   expect(client.executeQuery).toHaveBeenCalledWith(expect.anything(), "no-cache", 1000);
@@ -170,21 +193,22 @@ it("merges nested policy and duration overrides independently, preserving zero a
   const client = createClient();
   const query = { fetchPolicy: "cache-and-network" as const, cacheTime: 1000 };
   const defaultOptions = { query };
-  const context = { client, defaultOptions };
   render(
-    <GraphQLContext.Provider value={context}>
-      <Query name="root" />
-      <GraphQLCachePolicy fetchPolicy="no-cache">
-        <Query name="policyOnly" />
-        <GraphQLCachePolicy cacheTime={0}>
-          <Query name="durationOnly" />
-          <GraphQLCachePolicy>
-            <Query name="unchanged" />
+    <GraphQLContext.Provider value={{ client }}>
+      <GraphQLDefaultOptionsContext.Provider value={defaultOptions}>
+        <Query name="root" />
+        <GraphQLCachePolicy fetchPolicy="no-cache">
+          <Query name="policyOnly" />
+          <GraphQLCachePolicy cacheTime={0}>
+            <Query name="durationOnly" />
+            <GraphQLCachePolicy>
+              <Query name="unchanged" />
+            </GraphQLCachePolicy>
           </GraphQLCachePolicy>
+          <Query name="sibling" />
         </GraphQLCachePolicy>
-        <Query name="sibling" />
-      </GraphQLCachePolicy>
-      <Query name="after" />
+        <Query name="after" />
+      </GraphQLDefaultOptionsContext.Provider>
     </GraphQLContext.Provider>,
   );
 
@@ -194,9 +218,36 @@ it("merges nested policy and duration overrides independently, preserving zero a
   expect(client.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ unchanged }" }), "no-cache", 0);
   expect(client.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ sibling }" }), "no-cache", 1000);
   expect(client.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ after }" }), "cache-and-network", 1000);
-  expect(context.defaultOptions).toBe(defaultOptions);
   expect(defaultOptions.query).toBe(query);
   expect(query).toEqual({ fetchPolicy: "cache-and-network", cacheTime: 1000 });
+});
+
+it("inherits defaults across nested client providers and permits a client named defaultOptions", () => {
+  const outer = createClient();
+  const inner = createClient();
+  const named = createClient();
+  render(
+    <GraphQLDefaultOptionsContext.Provider value={{ query: { fetchPolicy: "cache-first", cacheTime: 1000 } }}>
+      <GraphQLContext.Provider value={{ client: outer }}>
+        <Query name="before" />
+        <GraphQLCachePolicy fetchPolicy="no-cache" cacheTime={500}>
+          <GraphQLContext.Provider value={{ client: inner, defaultOptions: named }}>
+            <Query name="innerClient" />
+            <Query name="namedClient" options={{ client: "defaultOptions" }} />
+          </GraphQLContext.Provider>
+        </GraphQLCachePolicy>
+        <Query name="after" />
+      </GraphQLContext.Provider>
+    </GraphQLDefaultOptionsContext.Provider>,
+  );
+
+  expect(outer.executeQuery).toHaveBeenCalledTimes(2);
+  expect(outer.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ before }" }), "cache-first", 1000);
+  expect(outer.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ after }" }), "cache-first", 1000);
+  expect(inner.executeQuery).toHaveBeenCalledTimes(1);
+  expect(inner.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ innerClient }" }), "no-cache", 500);
+  expect(named.executeQuery).toHaveBeenCalledTimes(1);
+  expect(named.executeQuery).toHaveBeenCalledWith(expect.objectContaining({ query: "{ namedClient }" }), "no-cache", 500);
 });
 
 it("applies explicit query overrides independently and preserves a zero cache duration", () => {

@@ -1,5 +1,5 @@
 import * as React from "react";
-import GraphQLContext from "./GraphQLContext";
+import GraphQLDefaultOptionsContext from "./GraphQLDefaultOptionsContext";
 import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
 
 interface IGraphQLCachePolicyProps extends NonNullable<IGraphQLDefaultOptions["query"]> {
@@ -7,27 +7,24 @@ interface IGraphQLCachePolicyProps extends NonNullable<IGraphQLDefaultOptions["q
 }
 
 /**
- * Sets default query cache options through GraphQLContext without changing the clients.
+ * Sets default query cache options without changing the clients.
  * Explicit query options take precedence; omitted props inherit the parent defaults.
  */
 const GraphQLCachePolicy = ({ fetchPolicy, cacheTime, children }: IGraphQLCachePolicyProps) => {
-  const context = React.useContext(GraphQLContext);
+  const defaultOptions = React.useContext(GraphQLDefaultOptionsContext);
   const value = React.useMemo(
     () => ({
-      ...context,
-      defaultOptions: {
-        ...context?.defaultOptions,
-        query: {
-          ...context?.defaultOptions?.query,
-          fetchPolicy: fetchPolicy ?? context?.defaultOptions?.query?.fetchPolicy,
-          cacheTime: cacheTime ?? context?.defaultOptions?.query?.cacheTime,
-        },
+      ...defaultOptions,
+      query: {
+        ...defaultOptions.query,
+        fetchPolicy: fetchPolicy ?? defaultOptions.query?.fetchPolicy,
+        cacheTime: cacheTime ?? defaultOptions.query?.cacheTime,
       },
     }),
-    [context, fetchPolicy, cacheTime],
+    [defaultOptions, fetchPolicy, cacheTime],
   );
 
-  return <GraphQLContext.Provider value={value}>{children}</GraphQLContext.Provider>;
+  return <GraphQLDefaultOptionsContext.Provider value={value}>{children}</GraphQLDefaultOptionsContext.Provider>;
 };
 
 export default GraphQLCachePolicy;

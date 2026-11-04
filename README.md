@@ -147,12 +147,14 @@ const client = new GraphQLClient({
 const context: IGraphQLContext = {
     client: client,                     // required: default client
     guest: guestClient,                 // optional: guest client
-    "alt": altClient,                   // optional: any other clients
-    defaultOptions: {                   // optional: defaults for descendant hooks
-        query: {
-            fetchPolicy: 'cache-first',
-            cacheTime: 60_000            // milliseconds
-        }
+    "alt": altClient                    // optional: any other clients
+};
+
+// Optional defaults for descendant hooks, provided independently of the clients.
+const defaultOptions: IGraphQLDefaultOptions = {
+    query: {
+        fetchPolicy: 'cache-first',
+        cacheTime: 60_000                // milliseconds
     }
 };
 ```
@@ -160,10 +162,14 @@ const context: IGraphQLContext = {
 3. Provide context to application
 
 ```tsx
-<GraphQLContext.Provider value={context}>
-    ...
-</GraphQLContext.Provider>
+<GraphQLDefaultOptionsContext.Provider value={defaultOptions}>
+    <GraphQLContext.Provider value={context}>
+        ...
+    </GraphQLContext.Provider>
+</GraphQLDefaultOptionsContext.Provider>
 ```
+
+`GraphQLDefaultOptionsContext` is optional and defaults to `{}`. Without hook defaults or explicit query options, each client uses its own configuration.
 
 ## Usage
 
@@ -261,9 +267,9 @@ import { GraphQLCachePolicy } from '@shane32/graphql';
 
 Both props are optional. `fetchPolicy` accepts `'cache-first'`, `'no-cache'`, or `'cache-and-network'`; `cacheTime` specifies the cache duration in milliseconds, including `0`. Nested wrappers inherit each omitted option independently, so `ProductDetails` above uses `'cache-and-network'` with a five-second cache duration.
 
-The wrapper merges its options into the existing `GraphQLContext.defaultOptions.query` and preserves the configured clients. You can also supply these defaults directly through `GraphQLContext.Provider`, as shown in [Advanced Configuration](#advanced-configuration). Each option resolves in this order: an explicit `useQuery` option, the inherited context default, then the client's `defaultFetchPolicy` or `defaultCacheTime`.
+The wrapper merges its options into `GraphQLDefaultOptionsContext` under `query`. You can also supply these defaults directly through `GraphQLDefaultOptionsContext.Provider`, as shown in [Advanced Configuration](#advanced-configuration). Each option resolves in this order: an explicit `useQuery` option, the inherited options context default, then the client's `defaultFetchPolicy` or `defaultCacheTime`.
 
-Defaults apply to queries using default, guest, named, or explicitly supplied clients. Changing a prop updates the corresponding default used by descendant hooks. Siblings outside the wrapper and the client's configuration are unchanged; mutations, subscriptions, and direct client calls are unaffected. Queries still follow the client's normal rules for sharing active and pending requests. A nested `GraphQLContext.Provider` replaces the context value as usual; include any defaults that should remain in scope in its value.
+Defaults apply to queries using default, guest, named, or explicitly supplied clients. Changing a prop updates the corresponding default used by descendant hooks. Siblings outside the wrapper and the client's configuration are unchanged; mutations, subscriptions, and direct client calls are unaffected. Queries still follow the client's normal rules for sharing active and pending requests. Nested client providers preserve these defaults because clients and hook defaults use separate contexts. A nested `GraphQLDefaultOptionsContext.Provider` replaces the options value; use `GraphQLCachePolicy` to merge cache options with inherited defaults.
 
 ### useMutation hook
 
@@ -575,9 +581,24 @@ This is useful when you need to create request objects outside of the provided h
 | `clearCache` | Clear the query cache | |
 | `resetStore` | Reset and refresh all cached queries | Should be used anytime the user is logged in/out to refresh permissions |
 
+### GraphQLDefaultOptionsContext
+
+Provides hook defaults independently of the clients in `GraphQLContext`. Its value has type `IGraphQLDefaultOptions` and defaults to `{}`:
+
+```typescript
+const defaultOptions: IGraphQLDefaultOptions = {
+    query: {
+        fetchPolicy: 'cache-first',
+        cacheTime: 60_000
+    }
+};
+```
+
+Both `query` and its properties are optional. Provide this value through `GraphQLDefaultOptionsContext.Provider` or merge inherited query defaults with `GraphQLCachePolicy`.
+
 ### GraphQLCachePolicy
 
-Merges default query cache options into `GraphQLContext.defaultOptions.query` for descendant `useQuery` hooks. See [Default cache options for child components](#default-cache-options-for-child-components) for usage and precedence.
+Merges default query cache options into `GraphQLDefaultOptionsContext` for descendant `useQuery` hooks. See [Default cache options for child components](#default-cache-options-for-child-components) for usage and precedence.
 
 | Prop | Description |
 |------|-------------|
@@ -598,8 +619,8 @@ Execute a GraphQL query with caching and automatic re-rendering.
 | `query` (required) | GraphQL query string or typed document |
 | `options` | Query options |
 | `options.variables` | Query variables |
-| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'`. Defaults to `GraphQLContext.defaultOptions.query.fetchPolicy`, then the client's `defaultFetchPolicy` |
-| `options.cacheTime` | Cache duration in milliseconds, including `0`. Defaults to `GraphQLContext.defaultOptions.query.cacheTime`, then the client's `defaultCacheTime` |
+| `options.fetchPolicy` | Caching strategy. Options: `'cache-first'`, `'no-cache'`, `'cache-and-network'`. Defaults to `query.fetchPolicy` from `GraphQLDefaultOptionsContext`, then the client's `defaultFetchPolicy` |
+| `options.cacheTime` | Cache duration in milliseconds, including `0`. Defaults to `query.cacheTime` from `GraphQLDefaultOptionsContext`, then the client's `defaultCacheTime` |
 | `options.client` | Client instance or name from context |
 | `options.guest` | Whether to use the guest client |
 | `options.skip` | Whether to skip execution of the query |
