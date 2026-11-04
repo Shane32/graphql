@@ -7,6 +7,8 @@ import IQueryResult from "./IQueryResult";
 import TypedDocumentString from "./TypedDocumentString";
 import useGraphQLClient from "./useGraphQLClient";
 import createRequest from "./createRequest";
+import IGraphQLDefaultOptions from "./IGraphQLDefaultOptions";
+import GraphQLDefaultOptionsContext from "./GraphQLDefaultOptionsContext";
 
 /**
  * Represents the return type of the `useQuery` hook.
@@ -40,13 +42,11 @@ interface IUseQueryRet<TResult> {
  * @template TResult The expected result type of the query.
  * @template TVariables The expected variables type of the query.
  */
-interface IOptions<TVariables> {
+interface IOptions<TVariables> extends IGraphQLDefaultOptions {
   /** Whether to use the guest client. */
   guest?: boolean;
   /** The client to use for the query, or the name of the client. */
   client?: IGraphQLClient | string;
-  /** The fetch policy to use for the query. */
-  fetchPolicy?: "cache-first" | "no-cache" | "cache-and-network";
   /** Whether to skip execution of the query. */
   skip?: boolean;
   /** Whether to automatically refetch the query when the query or variables change. */
@@ -76,6 +76,9 @@ const useQuery: <TResult, TVariables = unknown>(
   options?: IOptions<TVariables>,
 ) => {
   const client = useGraphQLClient(options && options.client, options && options.guest);
+  const defaultOptions = React.useContext(GraphQLDefaultOptionsContext);
+  const fetchPolicy = options?.fetchPolicy ?? defaultOptions.fetchPolicy;
+  const cacheTime = options?.cacheTime ?? defaultOptions.cacheTime;
   const currentVariables = options?.variables;
   const lastQueryResponseRef = React.useRef<IQueryResult<TResult> | undefined>(undefined);
   const queryRet = React.useMemo<IQueryResponse<TResult> | null>(() => {
@@ -89,7 +92,7 @@ const useQuery: <TResult, TVariables = unknown>(
       extensions: options?.extensions,
     });
 
-    return client.executeQuery<TResult, TVariables>(request, options?.fetchPolicy);
+    return client.executeQuery<TResult, TVariables>(request, fetchPolicy, cacheTime);
   }, [
     client,
     options?.skip,
@@ -97,7 +100,8 @@ const useQuery: <TResult, TVariables = unknown>(
     JSON.stringify(currentVariables || null),
     options?.operationName,
     JSON.stringify(options?.extensions || null),
-    options?.fetchPolicy,
+    fetchPolicy,
+    cacheTime,
   ]);
   const [data, setData] = React.useState(queryRet?.result || null);
 

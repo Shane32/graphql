@@ -18,7 +18,7 @@ const useGraphQLClient = (client?: IGraphQLClient | string, guest?: boolean) => 
   if (!client2) {
     // Use the client name if provided, otherwise the default or guest client as applicable
     const clientName = (typeof client === "string" && client) || (guest && "guest") || "client";
-    client2 = context[clientName];
+    client2 = context?.[clientName];
     if (!client2) {
       throw new Error(`Cannot find GraphQL client '${clientName}'`);
     }
